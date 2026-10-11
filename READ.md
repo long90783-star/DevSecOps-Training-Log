@@ -148,3 +148,104 @@ Copy myscript.sh vào thư mục đích /var/spool/bandit24/foo, đợi tối đ
 Bảo mật không phải là phép thuật, mà là sự thấu hiểu hệ thống sâu sắc hơn cả người tạo ra nó. Hôm nay, khi bạn lợi dụng cronjob để đánh cắp mật khẩu trong Bandit, bạn không dùng một phần mềm hack nào phức tạp. Bạn chỉ đơn giản là hiểu rõ cách Linux tự động hóa công việc và chèn mã kịch bản vào đúng điểm mù của luồng thực thi. Đó chính là tư duy cốt lõi của lộ trình này: Nghĩ như một kẻ tấn công, nhưng hành động với sự kỷ luật của một kỹ sư hệ thống.
 
 Bài toán ma trận LeetCode 74 lại mang đến một bài học khác về sự linh hoạt trong góc nhìn. Việc trải phẳng một không gian 2D thành một đường thẳng 1D trong tâm trí chứng minh rằng nhiều chướng ngại vật kỹ thuật có thể được giải quyết rất nhanh chóng nếu ta biết cách chuyển đổi cấu trúc dữ liệu. Khả năng nhìn thấu bề mặt của hệ thống và đưa nó về dạng cơ bản nhất là kỹ năng sống còn khi bạn phải thiết kế kiến trúc DevSecOps sau này.
+# Write-up: LeetCode 875 & OverTheWire Bandit 24–25
+
+## 1. LeetCode 875 — Koko Eating Bananas
+
+**Đề bài:** Tìm tốc độ ăn `k` nhỏ nhất để ăn hết `n` đống chuối trong `h` giờ
+(mỗi giờ chỉ ăn từ một đống, tối đa `k` quả).
+
+**Ý tưởng:** `k` càng lớn thì số giờ cần càng ít → tính đơn điệu → binary
+search trên **không gian đáp án** `[1, max(piles)]`.
+
+```cpp
+class Solution {
+public:
+    int minEatingSpeed(vector<int>& piles, int h) {
+        int left = 1, right = *max_element(piles.begin(), piles.end());
+        while (left < right) {
+            int mid = left + (right - left) / 2;
+            if (canfinish(piles, h, mid)) right = mid;
+            else left = mid + 1;
+        }
+        return left;
+    }
+private:
+    bool canfinish(const vector<int>& piles, int h, int k) {
+        long long hours = 0;
+        for (int p : piles) hours += (p + (long long)k - 1) / k;
+        return hours <= h;
+    }
+};
+```
+
+**Điểm then chốt:**
+- **Làm tròn lên bằng số nguyên:** `⌈p/k⌉ = (p + k - 1) / k`, vì chia nguyên
+  mặc định làm tròn xuống.
+- **`left < right` + `right = mid`**: dùng cho bài toán "tìm giá trị nhỏ nhất
+  thỏa điều kiện" — khác với "tìm giá trị chính xác" (`left <= right`,
+  `right = mid - 1`). Dùng sai cặp quy ước dễ gây lặp vô hạn hoặc lệch kết quả.
+- `hours` phải kiểu `long long` vì `piles[i]` tới 10⁹, dễ tràn `int`.
+
+**Độ phức tạp:** `O(n log(max(piles)))` thời gian, `O(1)` bộ nhớ.
+
+---
+
+## 2. Bandit 24 → 25 — Brute-force pincode
+
+**Đề bài:** Daemon ở cổng `30002` trả về mật khẩu bandit25 nếu nhận đúng mật
+khẩu bandit24 + pin 4 số, qua **một** kết nối duy nhất.
+
+```bash
+(for i in $(seq 0 9999); do
+  printf "%s %04d\n" "<password_bandit24>" "$i"
+done) | nc localhost 30002
+```
+
+- `seq 0 9999` sinh 10000 số; `for` lặp qua từng số, gọi `printf` cho mỗi số.
+- `%s` → mật khẩu; `%04d` → pin đệm đủ 4 chữ số; `\n` → mỗi lần thử một dòng
+  (daemon đọc theo dòng).
+- `( ... ) | nc` gộp toàn bộ 10000 dòng gửi qua một kết nối TCP duy nhất.
+
+**Lỗi hay gặp:** thiếu `%` trước `04d`, viết hoa `%S`, thiếu `\n` (dính liền
+10000 dòng), thiếu `$` trước `(seq ...)`, hoặc chạy cú pháp Bash trong
+PowerShell (phải chạy trong Bash thật trên server).
+
+---
+
+## Bài học
+
+- Binary search trên đáp án áp dụng khi điều kiện là hàm đơn điệu theo tham
+  số cần tìm, không chỉ trên mảng có sẵn.
+- Khi sinh dữ liệu brute-force bằng `printf`/`for`, cần kiểm soát chặt định
+  dạng (`%s`, `%04d`, `\n`) vì mỗi ký tự sai đều khiến request gửi đi không
+  hợp lệ.
+## 3. Linux Security: OverTheWire - Bandit (Level 25 -> 26)
+
+**Nhiệm vụ:** Đăng nhập vào user `bandit26` bằng khóa SSH (Private Key) lấy từ `bandit25`. Tuy nhiên, shell mặc định của `bandit26` không phải là `/bin/bash` mà là một kịch bản tùy chỉnh khiến kết nối bị đóng ngay lập tức. Mục tiêu là tìm cách thoát khỏi lớp vỏ bọc này (Shell Breakout) để chiếm quyền điều khiển.
+
+### Phân tích cơ chế giới hạn (Restricted Shell)
+Khi kiểm tra file `/etc/passwd`, shell của `bandit26` được cấu hình là `/usr/bin/showtext`. Script này sử dụng lệnh `more` để hiển thị một đoạn logo văn bản. 
+Đặc tính của lệnh `more` là:
+- Nếu màn hình Terminal đủ lớn để hiển thị toàn bộ nội dung, nó sẽ in ra hết và lập tức kết thúc tiến trình.
+- Khi tiến trình `more` kết thúc, phiên SSH cũng tự động bị ngắt (Disconnected).
+- Nếu màn hình Terminal **nhỏ hơn** đoạn văn bản, `more` sẽ tạm dừng, hiển thị chữ `--More--` ở góc dưới để chờ người dùng cuộn trang. Tại trạng thái dừng này, ta có thể gọi trình soạn thảo `vi` bằng cách nhấn phím `v`.
+
+### Các rào cản đã gặp và Cách khắc phục (Troubleshooting)
+
+**1. Vấn đề 1: Lệnh `more` không chịu dừng lại dù đã thu nhỏ cửa sổ.**
+- **Nguyên nhân:** Do các phần mềm Terminal hiện đại trên Windows đôi khi không gửi đúng thông số kích thước cửa sổ cho máy chủ Linux, khiến Linux vẫn tưởng màn hình đang rất to.
+- **Giải pháp:** Sử dụng lệnh `stty rows 4` để "ép" hệ thống tin rằng chiều cao của terminal hiện tại chỉ có đúng 4 dòng, buộc lệnh `more` phải kích hoạt trạng thái chờ `--More--`.
+
+**2. Vấn đề 2: Lỗi "Connecting from/to localhost is blocked".**
+- **Nguyên nhân:** Hệ thống OverTheWire đã thay đổi chính sách, cấm người dùng kết nối vòng (localhost) từ `bandit25` sang `bandit26` để tiết kiệm tài nguyên.
+- **Giải pháp:** Thay vì chạy lệnh SSH từ bên trong `bandit25`, ta phải sao chép nội dung file `bandit26.sshkey`, mang về máy cá nhân (local) và dùng nó để kết nối thẳng lên `bandit26`.
+
+**3. Vấn đề 3: Lỗi "UNPROTECTED PRIVATE KEY FILE!" (Permissions 0777).**
+- **Sự cố:** Dù đã dùng lệnh `chmod 600 bandit26_1` để bảo mật file khóa, SSH vẫn báo file này đang mở toang (0777) và từ chối kết nối.
+- **Giải thích bản chất DevSecOps:** Môi trường tôi đang dùng là **WSL (Windows Subsystem for Linux)**, và file khóa đang nằm ở đường dẫn `/mnt/c/Users/ACER/...`. Đây là thư mục thuộc phân vùng NTFS của Windows được ánh xạ vào Linux. Hệ thống tập tin NTFS của Windows **không tương thích** với cơ chế phân quyền POSIX của Linux. Do đó, lệnh `chmod` bị vô hiệu hóa ngầm, Linux không thể can thiệp vào quyền của file này.
+- **Cách khắc phục:** Di chuyển file khóa ra khỏi vùng `/mnt/c/...` và đưa về thư mục gốc thuần Linux của user hiện tại (`~/`). 
+  ```bash
+  mv bandit26_1 ~/
+  cd ~/
+  chmod 600 bandit26_1
