@@ -249,3 +249,94 @@ Khi kiểm tra file `/etc/passwd`, shell của `bandit26` được cấu hình l
   mv bandit26_1 ~/
   cd ~/
   chmod 600 bandit26_1
+# Write-up: Bandit 27–29 & LeetCode 153
+
+## 1. Bandit 27 → 28 — Git clone cơ bản
+
+**Đề bài:** Có git repo tại `ssh://bandit27-git@bandit.labs.overthewire.org/home/bandit27-git/repo`, cổng `2220`. Clone từ máy local, tìm mật khẩu bandit28.
+
+```bash
+git clone ssh://bandit27-git@bandit.labs.overthewire.org:2220/home/bandit27-git/repo
+cd repo && ls -la && cat README.md
+```
+
+Mật khẩu nằm ngay trong file hiện tại, không cần xem lịch sử commit.
+
+**Lưu ý:** URL dạng `ssh://` phải chỉ rõ cổng bằng `:2220` ngay sau hostname —
+nếu thiếu, `git clone` sẽ mặc định nối cổng 22 và bị từ chối
+(`Permission denied`, báo "not intended" port).
+
+---
+
+## 2. Bandit 28 → 29 — Mật khẩu ẩn trong lịch sử commit
+
+**Đề bài:** Tương tự level 27, nhưng với `bandit28-git` / repo của bandit28.
+
+```bash
+git clone ssh://bandit28-git@bandit.labs.overthewire.org:2220/home/bandit28-git/repo repo28
+cd repo28 && cat README.md
+```
+
+Lần này file hiện tại che mật khẩu bằng `xxxxxxxxxx`. Xem lịch sử commit:
+
+```bash
+git log --all --oneline
+```
+```
+de09b82 (HEAD -> master) fix info leak
+ad8a5f8 add missing data
+e4337f1 initial commit of README.md
+```
+
+Commit `fix info leak` chính là commit đã **xóa** mật khẩu thật. Mật khẩu nằm
+ở commit **trước đó**:
+
+```bash
+git show ad8a5f8:README.md
+```
+
+**Mẹo nhanh hơn:** `git log -p -- README.md` in luôn toàn bộ diff qua từng
+commit của một file, khỏi phải tra từng hash.
+
+**Lưu ý:** khi clone vào thư mục đã tồn tại tên `repo` (từ level trước), git
+báo lỗi `destination path 'repo' already exists`. Đặt tên thư mục đích khác
+bằng tham số thứ hai: `git clone <url> repo28`.
+
+---
+
+## 3. LeetCode 153 — Find Minimum in Rotated Sorted Array
+
+**Đề bài:** Mảng tăng dần bị xoay `k` lần (`k` không biết trước), các phần tử
+không trùng nhau. Tìm phần tử nhỏ nhất, yêu cầu `O(log n)`.
+
+**Ý tưởng:** Mảng sau khi xoay gồm hai đoạn tăng dần nối tiếp, đoạn sau luôn
+nhỏ hơn đoạn trước — điểm nối chính là đáp án. Binary search bằng cách so
+`nums[mid]` với `nums[right]`:
+- `nums[mid] > nums[right]` → điểm gãy nằm bên phải `mid` → `left = mid + 1`.
+- `nums[mid] <= nums[right]` → đoạn `[mid, right]` không có điểm gãy → đáp án
+  ở `mid` hoặc bên trái → `right = mid`.
+
+```cpp
+int findMin(vector<int>& nums) {
+    int left = 0, right = nums.size() - 1;
+    while (left < right) {
+        int mid = left + (right - left) / 2;
+        if (nums[mid] > nums[right]) left = mid + 1;
+        else right = mid;
+    }
+    return nums[left];
+}
+```
+
+**Vì sao so với `nums[right]` chứ không phải `nums[left]`:** so với `nums[left]`
+không phân biệt được giữa "chưa gặp điểm gãy, điểm gãy ở bên phải" và "mảng
+không hề bị xoay". So với `nums[right]` xử lý đúng cả hai trường hợp bằng
+cùng một logic.
+
+**Lỗi đã gặp khi tự viết:** gán nhầm `mid = right` thay vì `right = mid` —
+dòng này không ảnh hưởng gì tới `left`/`right` (vì `mid` được tính lại mỗi
+vòng), khiến vòng lặp không bao giờ thu hẹp → lặp vô hạn → Time Limit
+Exceeded. Luôn thay đổi `left`/`right`, không phải `mid`, để cập nhật phạm vi
+tìm kiếm.
+
+**Độ phức tạp:** `O(log n)` thời gian, `O(1)` bộ nhớ.
