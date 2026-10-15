@@ -340,3 +340,117 @@ Exceeded. Luôn thay đổi `left`/`right`, không phải `mid`, để cập nh�
 tìm kiếm.
 
 **Độ phức tạp:** `O(log n)` thời gian, `O(1)` bộ nhớ.
+# Write-up: Bandit 29–32 & LeetCode 1 (Two Sum)
+
+## 1. Bandit 29 → 30 — Mật khẩu ở branch khác
+
+```bash
+git clone ssh://bandit29-git@bandit.labs.overthewire.org:2220/home/bandit29-git/repo repo29
+cd repo29 && cat README.md   # thấy "<no passwords in production!>" — placeholder
+```
+
+Kiểm tra toàn bộ nhánh:
+```bash
+git log --all --oneline
+```
+```
+5a4df04 (HEAD -> master) fix username
+a6fec80 (origin/dev) add data needed for development
+da4e680 (origin/sploits-dev) add some silly exploit, just for shit and giggles
+d35a439 initial commit of README.md
+```
+Nhánh `origin/dev` chứa dữ liệu thật (khác bản "production" đã bị che):
+```bash
+git show a6fec80:README.md
+```
+
+---
+
+## 2. Bandit 30 → 31 — Mật khẩu ở tag ẩn (hidden ref)
+
+```bash
+git clone ssh://bandit30-git@bandit.labs.overthewire.org:2220/home/bandit30-git/repo repo30
+cd repo30 && cat README.md   # "just an epmty file... muahaha" — trêu đùa, không có gì
+```
+
+`git log --all`, `git fsck --unreachable`, `git notes list` đều không ra gì. Thử
+liệt kê **toàn bộ ref** (không chỉ branch/tag thông thường):
+
+```bash
+git show-ref
+```
+```
+bfc06d1... refs/heads/master
+bfc06d1... refs/remotes/origin/HEAD
+bfc06d1... refs/remotes/origin/master
+6a76bc8... refs/tags/secret          ← tag ẩn, không hiện qua `git tag -l`
+```
+
+```bash
+git show refs/tags/secret
+```
+→ in ra mật khẩu trực tiếp.
+
+**Bài học:** `git tag -l` có thể không liệt kê hết mọi ref; `git show-ref`
+(không tham số) in ra tất cả, kể cả ref bất thường.
+
+---
+
+## 3. Bandit 31 → 32 — Push file theo yêu cầu server
+
+```bash
+git clone ssh://bandit31-git@bandit.labs.overthewire.org:2220/home/bandit31-git/repo repo31
+cd repo31 && cat README.md
+```
+```
+Details:
+    File name: key.txt
+    Content: 'May I come in?'
+    Branch: master
+```
+
+```bash
+echo 'May I come in?' > key.txt
+git add -f key.txt        # -f cần thiết vì .gitignore có thể đang chặn key.txt
+git commit -m "add key.txt"
+git push origin master
+```
+
+Server validate nội dung file ngay trong quá trình nhận push, in mật khẩu ra
+`remote:` log trước khi cố tình từ chối (`pre-receive hook declined`) —
+`[remote rejected]` là hành vi dự kiến của level, không phải lỗi.
+
+---
+
+## 4. LeetCode 1 — Two Sum
+
+**Đề bài:** Tìm chỉ số hai phần tử trong mảng có tổng bằng `target`, chỉ có
+đúng một đáp án, không dùng lại cùng một phần tử.
+
+**Sai lầm ban đầu:** áp nhầm pattern sliding window (chỉ xét cặp liền kề) —
+không đúng vì hai số cần tìm có thể nằm ở bất kỳ vị trí nào trong mảng, không
+nhất thiết liên tiếp.
+
+**Lời giải đúng — hash map, O(n):**
+```cpp
+vector<int> twoSum(vector<int>& nums, int target) {
+    unordered_map<int, int> seen; // value -> index
+    for (int i = 0; i < nums.size(); i++) {
+        int need = target - nums[i];
+        if (seen.count(need)) return {seen[need], i};
+        seen[nums[i]] = i;
+    }
+    return {};
+}
+```
+
+**Cơ chế:**
+- `need = target - nums[i]`: số còn thiếu để đủ tổng.
+- `seen.count(need)`: tra cứu O(1) xem `need` đã gặp trước đó chưa (thay vì
+  dò lại cả mảng — đây là lý do đạt O(n) thay vì O(n²)).
+- `seen[nums[i]] = i`: lưu lại **sau** khi kiểm tra, tránh phần tử tự ghép với
+  chính nó.
+- `map[key]` dùng ngoặc **vuông** để đọc/ghi value; `map.count(key)` dùng
+  ngoặc **tròn** vì là gọi hàm kiểm tra tồn tại key — không nhầm hai cú pháp.
+
+**Độ phức tạp:** O(n) thời gian, O(n) bộ nhớ (cho hash map).
