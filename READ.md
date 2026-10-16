@@ -454,3 +454,174 @@ vector<int> twoSum(vector<int>& nums, int target) {
   ngoặc **tròn** vì là gọi hàm kiểm tra tồn tại key — không nhầm hai cú pháp.
 
 **Độ phức tạp:** O(n) thời gian, O(n) bộ nhớ (cho hash map).
+# Write-up: Bandit 32 → 33 — Thoát khỏi Uppershell
+
+**Đề bài:** Shell của bandit33 là một chương trình đặc biệt, không phải
+`/bin/bash`. Tìm cách thoát ra.
+
+**Phân tích:**
+```bash
+$ ls -la
+-rwsr-x--- 1 bandit33 bandit32 15136 Sep 26 21:53 uppershell
+```
+File `uppershell` có cờ **setuid** (`s` trong quyền chủ sở hữu) — chạy với
+quyền của bandit33. Khi SSH vào, màn hình hiện:
+```
+WELCOME TO THE UPPERCASE SHELL
+>>
+```
+Mọi lệnh gõ vào đều bị **chuyển thành chữ IN HOA** trước khi thực thi (ví dụ
+`ls` → `LS`), nên mọi lệnh thường đều báo "command not found" vì Linux phân
+biệt hoa-thường và không có lệnh nào tên `LS`.
+
+**Khai thác:**
+```bash
+>> $0
+$
+```
+`$0` là biến chứa **đường dẫn tới shell hiện tại** — giá trị này vốn đã lưu
+sẵn dạng chữ thường trong bộ nhớ (không phải ký tự người dùng gõ ra nên không
+bị chuyển hoa). Gõ `$0` khiến chương trình thực thi lại chính shell đó, mở ra
+một **bash thật**, thoát khỏi giới hạn chữ hoa.
+
+Sau đó tìm mật khẩu như bình thường:
+```bash
+$ cat /etc/bandit_pass/bandit33
+```
+
+**Bài học:** Khi một "bộ lọc" chặn các ký tự/lệnh người dùng gõ vào, các biến
+**có sẵn giá trị trong môi trường** (`$0`, `$SHELL`, biến môi trường khác)
+thường không đi qua bộ lọc đó — vì bộ lọc xử lý *input thô*, còn biến được
+*shell tự thay thế (expand)* bằng giá trị đã lưu sẵn trước khi bị chuyển đổi.
+
+---
+
+Hoàn thành toàn bộ chuỗi Bandit (Level 0 → 33). Level 34 chưa tồn tại tại thời
+điểm làm bài.
+# Write-up tổng kết: OverTheWire Bandit (Level 0 → 33)
+
+Hoàn thành toàn bộ chuỗi Bandit hiện có. Level 34 chưa tồn tại tại thời điểm
+làm bài.
+
+## Nhóm kỹ năng đã rèn luyện
+
+### Level 0–23: Nền tảng Linux & thao tác file
+Làm quen với `ssh`, điều hướng thư mục, quyền file (`chmod`, SUID/SGID), nén
+và giải nén (`tar`, `gzip`, `bzip2`), mã hóa cơ bản (base64, ROT13, hex, xxd),
+tìm kiếm file (`find`), xử lý văn bản (`grep`, `sort`, `cut`, `awk`), socket
+và mạng cơ bản (`nc`, SSL/`openssl`), cron job, và các binary SUID khai thác
+qua biến môi trường hoặc `PATH`.
+
+### Level 24 → 25: Brute-force qua socket
+Daemon lắng nghe ở một cổng cố định, yêu cầu gửi mật khẩu + pin 4 chữ số qua
+**một kết nối duy nhất**. Dùng `for`/`seq`/`printf` sinh 10000 dòng thử, pipe
+thẳng vào `nc`:
+```bash
+(for i in $(seq 0 9999); do printf "%s %04d\n" "<password>" "$i"; done) | nc localhost 30002
+```
+**Điểm mấu chốt:** `%04d` làm tròn đủ 4 chữ số, `\n` tách từng lượt thử, toàn
+bộ output của vòng lặp được pipe qua một kết nối `nc` duy nhất thay vì mở lại
+kết nối cho mỗi lần thử.
+
+### Level 25 → 26: Thoát khỏi restricted shell qua `more`
+Shell của user là script chỉ chạy `more ~/text.txt` rồi thoát. Nếu nội dung
+dài hơn màn hình, `more` dừng ở `--More--`, tại đó phím `v` mở `vi`, và từ
+`vi` dùng `:set shell=/bin/bash` + `:shell` để lấy shell thật. Trick: **thu
+nhỏ cửa sổ terminal** trước khi SSH để buộc nội dung tràn quá một trang.
+Đăng nhập bằng **SSH private key** (không phải mật khẩu), đúng cổng `2220`
+(không phải `localhost` cổng 22 mặc định), và thêm cờ
+`-o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa` cho key
+RSA cũ.
+
+### Level 26 → 27: SUID binary chạy lệnh thay vì đọc file
+Binary setuid nhận tham số như một **lệnh để thực thi**, không phải đường dẫn
+file để đọc:
+```bash
+./bandit27-do cat /etc/bandit_pass/bandit27
+```
+
+### Level 27 → 31: Git — đọc và ghi lịch sử
+Chuỗi 4 level xoay quanh git, mỗi level thêm một lớp khó:
+- **27→28:** mật khẩu nằm ngay trong `README.md` sau khi `git clone`.
+- **28→29:** mật khẩu bị xóa ở commit mới nhất ("fix info leak"); tìm lại ở
+  commit trước đó bằng `git show <hash>:README.md`.
+- **29→30:** mật khẩu bị thay bằng placeholder trên `master`; dữ liệu thật
+  nằm ở một **branch khác** (`origin/dev`), tìm qua `git log --all --oneline`.
+- **30→31:** không có gì trong commit, branch, hay dangling object
+  (`git fsck --unreachable` rỗng); mật khẩu nằm ở một **tag ẩn**, chỉ thấy
+  qua `git show-ref` (không dùng `--all`, flag này không tồn tại cho lệnh
+  này) thay vì `git tag -l`.
+
+**Lưu ý chung cho URL SSH git:** luôn chỉ rõ cổng bằng `:2220` ngay sau
+hostname (`ssh://user@host:2220/path`), nếu không sẽ mặc định nối cổng 22 và
+bị từ chối.
+
+### Level 31 → 32: Push file theo yêu cầu server
+Server validate nội dung file trong lúc nhận push, trả mật khẩu qua log
+`remote:` trước khi cố tình từ chối push (`pre-receive hook declined`):
+```bash
+echo 'May I come in?' > key.txt
+git add -f key.txt   # -f vì .gitignore có thể đang chặn file
+git commit -m "add key.txt"
+git push origin master
+```
+
+### Level 32 → 33: Thoát khỏi "uppershell"
+Mọi lệnh gõ vào bị tự động chuyển thành chữ HOA trước khi chạy, khiến lệnh
+thường luôn báo "not found". Biến `$0` (đường dẫn shell hiện tại) đã có sẵn
+giá trị chữ thường trong bộ nhớ, không bị bộ lọc input chạm tới:
+```bash
+>> $0
+$
+```
+Mở ra bash thật, đọc mật khẩu bình thường.
+
+## Bài học xuyên suốt
+
+1. **Luôn đọc kỹ file cấu hình và script** (`/etc/passwd`, nội dung shell)
+   trước khi đoán cách khai thác — đáp án thường nằm ngay trước mắt.
+2. **Lỗi SSH `Permission denied` thường do 4 nguyên nhân:** sai phương thức
+   xác thực (key vs password), sai cổng, thuật toán mã hóa bị chặn, hoặc
+   quyền file key quá rộng — kiểm tra lần lượt từng nguyên nhân.
+3. **Git lưu trữ nhiều hơn những gì `git log` mặc định hiển thị:** branch
+   khác, tag ẩn, commit cũ bị "xóa" trên HEAD — luôn kiểm tra `--all`,
+   `show-ref`, `fsck --unreachable` khi nghi ngờ dữ liệu bị giấu.
+4. **Bộ lọc input (restricted shell, uppercase shell...) thường chỉ chặn
+   những gì người dùng gõ trực tiếp**, không chặn được giá trị đã có sẵn
+   trong biến môi trường (`$0`, `$SHELL`) hay cơ chế shell tự mở rộng
+   (`more` → `vi` → `:shell`).
+# [DevSecOps Automation] Xây dựng công cụ CLI tự động hóa kết nối SSH 
+
+**Date:** 16/10/2026
+**Topics:** Bash Scripting, Automation, SSH Protocol, Defensive Programming.
+
+---
+
+## 1. Đặt vấn đề (The Problem)
+Trong quá trình giải quyết các thử thách của hệ thống OverTheWire (Bandit Wargame), tôi nhận thấy một thao tác lặp đi lặp lại rất tốn thời gian: Cứ qua mỗi level, tôi lại phải gõ thủ công một chuỗi lệnh SSH dài dòng để đăng nhập (`ssh banditX@bandit.labs.overthewire.org -p 2220`), sau đó chờ hệ thống hỏi mật khẩu rồi mới copy/paste mật khẩu vào. 
+
+Với tư duy của một kỹ sư DevSecOps, **bất cứ thứ gì phải làm thủ công từ 3 lần trở lên đều nên được tự động hóa**. Tuy nhiên, lệnh `ssh` mặc định được thiết kế để chặn việc truyền mật khẩu trực tiếp qua dòng lệnh (nhằm bảo mật). Do đó, tôi đã xây dựng một công cụ Bash Script nhỏ gọn kết hợp với `sshpass` để giải quyết triệt để rào cản này.
+
+## 2. Mã nguồn công cụ (The Script: `bandit.sh`)
+
+Công cụ này cho phép tôi đăng nhập vào bất kỳ level nào chỉ với một cú pháp duy nhất: 
+`./bandit.sh <level> "<password>"`
+
+```bash
+#!/bin/bash
+
+# Khối lập trình phòng thủ: Kiểm tra số lượng tham số đầu vào
+if [ "$#" -ne 2 ]; then
+    echo "Loi: Thieu hoac sai tham so!"
+    echo "Cach dung: ./bandit.sh <level> <password>"
+    echo "Vi du: ./bandit.sh 27 \"STJLJBRRph...\""
+    exit 1
+fi
+
+LEVEL=$1
+PASSWORD=$2
+
+echo "Dang tu dong ket noi toi Bandit Level $LEVEL..."
+
+# Thực thi SSH tự động bỏ qua cảnh báo Host Key và tự động điền mật khẩu
+sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no bandit$LEVEL@bandit.labs.overthewire.org -p 2220
