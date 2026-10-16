@@ -625,3 +625,127 @@ echo "Dang tu dong ket noi toi Bandit Level $LEVEL..."
 
 # Thực thi SSH tự động bỏ qua cảnh báo Host Key và tự động điền mật khẩu
 sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no bandit$LEVEL@bandit.labs.overthewire.org -p 2220
+# Write-up: LeetCode 242 - Valid Anagram
+
+* **Độ khó:** Easy
+* **Dạng bài (Pattern):** Hash Table / Frequency Counting / Array
+* **Đường dẫn:** [242. Valid Anagram](https://leetcode.com/problems/valid-anagram/)
+
+---
+
+## 1. Tóm tắt đề bài
+Cho hai chuỗi $s$ và $t$. Kiểm tra xem $t$ có phải là **từ đảo chữ** (anagram) của $s$ hay không. 
+
+> **Anagram là gì?** Hai chuỗi là anagram của nhau nếu chúng được tạo thành từ cùng một tập hợp các ký tự với số lần xuất hiện của mỗi ký tự hoàn toàn giống nhau, chỉ khác biệt ở thứ tự sắp xếp.
+
+---
+
+## 2. Tư duy giải thuật (Intuition)
+
+### Cách 1: Bảng đếm tần suất / Cân bằng số đếm (Khuyên dùng - Optimal)
+Thay vì tạo 2 Bảng băm (Hash Map) để đếm số lượng ký tự của từng chuỗi rồi so sánh, ta áp dụng nguyên lý **"Cán cân thanh toán"**:
+1. **Kiểm tra độ dài:** Nếu $s.length() \neq t.length()$, hai chuỗi không thể là anagram $\rightarrow$ Trả về `false` ngay lập tức (Early Exit).
+2. **Cập nhật tần suất:** Duyệt qua từng vị trí $i$ của cả hai chuỗi đồng thời:
+   * Ký tự $s[i]$ xuất hiện bên $s$: **Cộng 1** vào bảng đếm.
+   * Ký tự $t[i]$ xuất hiện bên $t$: **Trừ 1** khỏi bảng đếm.
+3. **Kiểm tra số dư:** Sau khi duyệt xong, nếu $s$ và $t$ chứa tập hợp ký tự hoàn toàn giống nhau, tất cả các vị trí đếm phải triệt tiêu về $0$. Nếu tồn tại bất kỳ ký tự nào có số dư khác $0$, trả về `false`.
+
+---
+
+## 3. Cài đặt thuật toán (C++)
+
+### Phương án A: Tối ưu bộ nhớ với Mảng cố định (Dành cho chữ cái $a \rightarrow z$)
+Vì điều kiện mặc định của đề bài chỉ gồm các chữ cái tiếng Anh in thường, ta dùng mảng `int count[26]` thay cho Hash Map để đạt hiệu năng tối đa.
+
+```cpp
+#include <string>
+#include <vector>
+
+using namespace std;
+
+class Solution {
+public:
+    bool isAnagram(string s, string t) {
+        if (s.length() != t.length()) return false;
+
+        int count[26] = {0};
+
+        for (int i = 0; i < s.length(); i++) {
+            count[s[i] - 'a']++;
+            count[t[i] - 'a']--;
+        }
+
+        for (int i = 0; i < 26; i++) {
+            if (count[i] != 0) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+};# Write-up: LeetCode 242 - Valid Anagram
+
+* **Độ khó:** Easy
+* **Dạng bài (Pattern):** Hash Table / Frequency Counting / Array
+* **Đường dẫn:** [242. Valid Anagram](https://leetcode.com/problems/valid-anagram/)
+
+---
+
+## 1. Tóm tắt đề bài
+Cho hai chuỗi $s$ và $t$. Kiểm tra xem $t$ có phải là **từ đảo chữ** (anagram) của $s$ hay không. 
+
+> **Anagram là gì?** Hai chuỗi là anagram của nhau nếu chúng được tạo thành từ cùng một tập hợp các ký tự với số lần xuất hiện của mỗi ký tự hoàn toàn giống nhau, chỉ khác biệt ở thứ tự sắp xếp.
+
+---
+
+## 2. Tư duy giải thuật (Intuition)
+
+### Cách 1: Bảng đếm tần suất / Cân bằng số đếm (Khuyên dùng - Optimal)
+Thay vì tạo 2 Bảng băm (Hash Map) để đếm số lượng ký tự của từng chuỗi rồi so sánh, ta áp dụng nguyên lý **"Cán cân thanh toán"**:
+1. **Kiểm tra độ dài:** Nếu $s.length() \neq t.length()$, hai chuỗi không thể là anagram $\rightarrow$ Trả về `false` ngay lập tức (Early Exit).
+2. **Cập nhật tần suất:** Duyệt qua từng vị trí $i$ của cả hai chuỗi đồng thời:
+   * Ký tự $s[i]$ xuất hiện bên $s$: **Cộng 1** vào bảng đếm.
+   * Ký tự $t[i]$ xuất hiện bên $t$: **Trừ 1** khỏi bảng đếm.
+3. **Kiểm tra số dư:** Sau khi duyệt xong, nếu $s$ và $t$ chứa tập hợp ký tự hoàn toàn giống nhau, tất cả các vị trí đếm phải triệt tiêu về $0$. Nếu tồn tại bất kỳ ký tự nào có số dư khác $0$, trả về `false`.
+
+---
+
+## 3. Cài đặt thuật toán (C++)
+
+### Phương án A: Tối ưu bộ nhớ với Mảng cố định (Dành cho chữ cái $a \rightarrow z$)
+Vì điều kiện mặc định của đề bài chỉ gồm các chữ cái tiếng Anh in thường, ta dùng mảng `int count[26]` thay cho Hash Map để đạt hiệu năng tối đa.
+
+```cpp
+#include <string>
+#include <vector>
+
+#include <string>
+#include <unordered_map>
+
+using namespace std;
+
+class Solution {
+public:
+    bool isAnagram(string s, string t) {
+        if (s.length() != t.length()) return false;
+
+        unordered_map<char, int> charCount;
+
+        // Đếm tần suất xuất hiện
+        for (int i = 0; i < s.length(); i++) {
+            charCount[s[i]]++;
+            charCount[t[i]]--;
+        }
+
+        // C++17 Structured Binding: Tách trực tiếp [key, value]
+        for (auto const& [key, value] : charCount) {
+            if (value != 0) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+};
+
+        
