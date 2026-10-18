@@ -1033,3 +1033,97 @@ public:
 };
 
         
+# [Write-up] picoCTF: Web Exploitation Fundamentals & Automation
+
+**Author:** [Tên của bạn]
+**Date:** 18/10/2026
+**Tags:** `Web Exploitation`, `DevSecOps`, `Bash Scripting`, `HTTP Protocol`, `Information Disclosure`
+
+---
+
+## Lời nói đầu (Introduction)
+Bộ tài liệu này ghi chép lại quá trình phân tích và khai thác 4 thử thách cơ bản trong mảng Web Exploitation của hệ thống picoCTF (phiên bản triển khai trên CyLab Academy). Các kỹ thuật được sử dụng bao trùm từ việc rà soát mã nguồn tĩnh (Static Analysis), thao túng giao thức HTTP, cho đến việc tự động hóa tấn công Brute-force bằng Bash Script - mang đậm tư duy của một kỹ sư DevSecOps.
+
+---
+
+## 1. Challenge: Insp3ct0r (Easy)
+
+### Đặt vấn đề
+Bài toán yêu cầu tìm kiếm lá cờ bị chia nhỏ và cất giấu bên trong các thành phần cấu tạo nên trang web (Frontend).
+
+### Phân tích và Khai thác (The Exploit)
+Một trang web cơ bản được xây dựng từ 3 thành phần chính: HTML (khung xương), CSS (giao diện) và JavaScript (tương tác). Bằng cách sử dụng công cụ Developer Tools (F12) trên trình duyệt, ta có thể dễ dàng kiểm tra mã nguồn (Inspect) của cả 3 thành phần này:
+
+1.  **Phần 1/3 (HTML):** Xem mã nguồn trang (Ctrl + U). Kéo xuống cuối file `index.html`, ta tìm thấy một đoạn comment chứa phần đầu của cờ:
+    `<!-- Html is neat. Anyways have 1/3 of the flag: academy{tru3_d3 -->`
+2.  **Phần 2/3 (CSS):** Truy cập vào đường link chứa file `mycss.css`. Ở dòng cuối cùng, phần thứ hai được giấu trong comment của CSS:
+    `/* You need CSS to make pretty pages. Here's part 2/3 of the flag: t3ct1ve_0r_ju5t */`
+3.  **Phần 3/3 (JavaScript):** Truy cập vào file `myjs.js`. Tương tự, phần cuối của cờ nằm ở dòng cuối:
+    `/* Javascript sure is neat. Anyways part 3/3 of the flag: _lucky?6679a3ba} */`
+
+**Flag:** `academy{tru3_d3t3ct1ve_0r_ju5t_lucky?6679a3ba}`
+
+---
+
+## 2. Challenge: GET aHEAD (Easy)
+
+### Đặt vấn đề
+Giao diện trang web có hai nút bấm để thay đổi màu nền (đỏ và xanh). Gợi ý yêu cầu ta hãy "đi trước một bước" (GET aHEAD) và nhắc nhở rằng chúng ta có nhiều hơn 2 sự lựa chọn.
+
+### Phân tích và Khai thác (The Exploit)
+Trong giao thức mạng HTTP, `GET` và `POST` là hai phương thức (Method) phổ biến nhất (tương ứng với 2 nút bấm trên trang). Tuy nhiên, tên bài toán đã cố tình viết hoa chữ **HEAD**. 
+
+Phương thức `HEAD` hoạt động hệt như `GET`, nhưng nó yêu cầu máy chủ chỉ trả về phần Header (thông tin cấu hình) chứ không tải về phần Body (giao diện trang web). Người ra đề đã lén nhúng lá cờ vào phần Header này.
+
+Thay vì dùng phần mềm trung gian như Burp Suite để can thiệp gói tin mất thời gian, ta sử dụng công cụ CLI `curl` mạnh mẽ trên Linux để truy vấn trực tiếp:
+
+```bash
+# Tham số -I ép curl gửi đi một yêu cầu HTTP dạng HEAD thay vì GET mặc định
+curl -I http://mercury.picoctf.net:xxxx/
+```
+*Kết quả trả về trên Terminal sẽ xuất hiện một dòng Header chứa lá cờ cần tìm.*
+
+---
+
+## 3. Challenge: Cookies (Easy - Medium)
+
+### Đặt vấn đề
+Trang web có một ô tìm kiếm tên các loại bánh quy. Khi nhập đúng định dạng, hệ thống cấp cho người dùng một thẻ Cookie có tên biến là `name` và mang giá trị bằng số nguyên (ví dụ: `name=0`). Cờ được giấu dưới một con số bí mật.
+
+### Phân tích và Khai thác (The Exploit)
+Đây là một lỗ hổng **Cookie Manipulation** (Thao túng bộ nhớ tạm) rất điển hình. Khi thay đổi giá trị của Cookie `name` thành 1, 2, 3... thông qua tab Application trong Developer Tools (F12) và tải lại trang, giao diện web sẽ thay đổi tương ứng.
+
+**Tự động hóa với DevSecOps Mindset:**
+Việc dò số thủ công (Brute-force) bằng tay trên trình duyệt là phi thực tế nếu con số mục tiêu lớn. Để tối ưu hóa, tôi đã xây dựng một vòng lặp Bash Script ép máy tính gửi tự động hàng loạt gói tin truy vấn kèm Cookie giả mạo bằng công cụ `curl`:
+
+```bash
+for i in $(seq 1 30); do 
+    echo "Dang thu Cookie name=$i..."
+    # -s: chạy ngầm; -L: bám theo các lệnh chuyển hướng (redirect) của máy chủ
+    curl -s -L --cookie "name=$i" http://chatelaine.cylabacademy.net:26865/check | grep -o "academy{.*}"
+done
+```
+**Cơ chế hoạt động:** Vòng lặp bắn 30 phát đạn mang theo cookie từ 1 đến 30 vào endpoint `/check`. Lệnh `grep` đóng vai trò như một chiếc màng lọc, tự động gạt bỏ mọi rác HTML và chỉ in ra màn hình chuỗi ký tự nào có định dạng của lá cờ.
+
+**Flag:** `academy{3v3ry1_l0v3s_c00k135_90a3a7cb}`
+
+---
+
+## 4. Challenge: Scavenger Hunt (Easy)
+
+### Đặt vấn đề
+Bài tập yêu cầu tìm 5 mảnh ghép của lá cờ bị giấu ở các "điểm mù" khác nhau trên máy chủ. Mỗi khi tìm thấy một mảnh, hệ thống sẽ để lại câu đố (manh mối) chỉ đường đến mảnh tiếp theo.
+
+### Phân tích và Khai thác (The Exploit)
+Bài toán này khai thác lỗ hổng **Information Disclosure** (Rò rỉ thông tin nhạy cảm), phơi bày các tệp tin hệ thống do sự bất cẩn của quản trị viên (SysAdmin).
+
+*   **Mảnh 1:** Xem Source Code HTML (`index.html`) $\rightarrow$ Thu được mảnh 1: `academy{t`
+*   **Mảnh 2:** Truy cập file CSS (`mycss.css`) $\rightarrow$ Thu được mảnh 2: `h4ts_4_l0` và câu đố về Google Indexing.
+*   **Mảnh 3 (Googlebot):** Bất kỳ website nào cũng dùng tệp `robots.txt` để giao tiếp với các con bọ tìm kiếm (crawler). Truy cập `http://.../robots.txt` $\rightarrow$ Thu được mảnh 3: `t_0f_pl4c` và câu đố về máy chủ Apache.
+*   **Mảnh 4 (Apache Server):** Máy chủ Apache mặc định dùng tệp tin ẩn `.htaccess` để cấu hình quyền truy cập. Truy cập `http://.../.htaccess` $\rightarrow$ Thu được mảnh 4: `3s_2_l00k` và câu đố về máy tính Mac.
+*   **Mảnh 5 (macOS Artifacts):** Hệ điều hành máy Mac luôn tự động sinh ra tệp ẩn `.DS_Store` để lưu thuộc tính thư mục. Quản trị viên đã vô tình đẩy cả file này lên máy chủ Public. Truy cập `http://.../.DS_Store` $\rightarrow$ Thu được phần cuối cùng của lá cờ.
+
+Ghép 5 mảnh lại theo đúng thứ tự, ta hoàn thành cuộc đi săn.
+
+---
+*Documented by [HoangLongUIT] - Hành trình chinh phục Cyber Security & DevSecOps.*
