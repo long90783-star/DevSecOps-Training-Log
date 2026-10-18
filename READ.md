@@ -1,3 +1,287 @@
+# OverTheWire Bandit: Full Write-up (Level 0 -> Level 19)
+
+Tài liệu tổng hợp hướng dẫn chi tiết 20 Level đầu tiên của Wargame OverTheWire: Bandit. Mỗi level bao gồm mục tiêu, câu lệnh thực thi và giải thích chi tiết cơ chế hoạt động của các lệnh Linux CLI.
+
+---
+
+## Level 0 -> Level 1
+- **Mục tiêu:** Kết nối đến máy chủ Bandit qua SSH và đọc file `readme` nằm trong thư mục home.
+- **Lệnh thực thi:**
+  ```bash
+  # Kết nối SSH (Password: bandit0)
+  ssh bandit0@bandit.labs.overthewire.org -p 2220
+
+  # Đọc file readme
+  cat readme
+  ```
+- **Giải thích:**
+  - `ssh`: Công cụ kết nối điều khiển máy chủ từ xa an toàn.
+  - `-p 2220`: Cổng SSH tùy chỉnh của OverTheWire (mặc định của SSH là 22).
+  - `cat`: Lệnh in nội dung file ra màn hình.
+
+---
+
+## Level 1 -> Level 2
+- **Mục tiêu:** Đọc file có tên là `-` nằm trong thư mục home.
+- **Lệnh thực thi:**
+  ```bash
+  cat ./-
+  ```
+- **Giải thích:**
+  - Ký tự `-` thường được các lệnh Linux hiểu là luồng đầu vào/đầu ra chuẩn (stdin/stdout). Nếu gõ `cat -`, trình biên dịch sẽ chờ dữ liệu từ bàn phím thay vì đọc file.
+  - Sử dụng đường dẫn tương đối `./-` giúp chỉ định rõ ràng file `-` nằm ở thư mục hiện tại (`.`).
+
+---
+
+## Level 2 -> Level 3
+- **Mục tiêu:** Đọc file có tên chứa khoảng trắng `spaces in this filename`.
+- **Lệnh thực thi:**
+  ```bash
+  # Cách 1: Dùng dấu ngoặc kép
+  cat "spaces in this filename"
+
+  # Cách 2: Escaping khoảng trắng bằng dấu gạch chéo ngược
+  cat spaces\ in\ this\ filename
+  ```
+- **Giải thích:**
+  - Trong Shell, khoảng trắng được dùng để phân tách các tham số. Dùng cặp ngoặc kép `""` hoặc ký tự escape `\` để giữ nguyên chuỗi tên file có khoảng trắng.
+
+---
+
+## Level 3 -> Level 4
+- **Mục tiêu:** Đọc file ẩn nằm trong thư mục `inhere`.
+- **Lệnh thực thi:**
+  ```bash
+  cd inhere
+  ls -la
+  cat .hidden
+  ```
+- **Giải thích:**
+  - Trong Linux, các file/thư mục có tên bắt đầu bằng dấu chấm `.` là file ẩn.
+  - `ls -a`: Hiển thị tất cả file kể cả file ẩn (`a` = all).
+  - `ls -la`: Kết hợp hiển thị danh sách chi tiết (quyền hạn, dung lượng, chủ sở hữu).
+
+---
+
+## Level 4 -> Level 5
+- **Mục tiêu:** Tìm file có thể đọc được dưới dạng văn bản (human-readable) duy nhất trong thư mục `inhere`.
+- **Lệnh thực thi:**
+  ```bash
+  cd inhere
+  file ./*
+  cat ./-file07
+  ```
+- **Giải thích:**
+  - `file ./*`: Kiểm tra định dạng dữ liệu (encoding/type) của tất cả file trong thư mục.
+  - Tìm file trả về kết quả `ASCII text`. Các file còn lại là mã nhị phân (data).
+
+---
+
+## Level 5 -> Level 6
+- **Mục tiêu:** Tìm file nằm trong `inhere` thỏa mãn 3 điều kiện: human-readable, kích thước đúng 1033 bytes, không có quyền thực thi (not executable).
+- **Lệnh thực thi:**
+  ```bash
+  find inhere -type f -size 1033c ! -executable
+  cat inhere/maybehere07/.file2
+  ```
+- **Giải thích:**
+  - `find inhere`: Tìm kiếm bắt đầu từ thư mục `inhere`.
+  - `-type f`: Chỉ tìm file thông thường (không tìm thư mục).
+  - `-size 1033c`: Kích thước đúng 1033 bytes (`c` = bytes).
+  - `! -executable`: Phủ định thuộc tính thực thi (không phải file chạy được).
+
+---
+
+## Level 6 -> Level 7
+- **Mục tiêu:** Tìm file trên toàn bộ hệ thống thỏa mãn: thuộc sở hữu của user `bandit7`, thuộc group `bandit6`, kích thước 33 bytes.
+- **Lệnh thực thi:**
+  ```bash
+  find / -user bandit7 -group bandit6 -size 33c 2>/dev/null
+  cat /var/lib/dpkg/info/bandit7.password
+  ```
+- **Giải thích:**
+  - `find /`: Quét từ thư mục gốc của hệ thống.
+  - `-user bandit7 -group bandit6`: Lọc theo quyền sở hữu tài khoản và nhóm.
+  - `2>/dev/null`: Chuyển hướng toàn bộ luồng lỗi (Standard Error - fd 2) do thiếu quyền truy cập vào "hố đen" `/dev/null` để tránh làm rối màn hình.
+
+---
+
+## Level 7 -> Level 8
+- **Mục tiêu:** Lấy mật khẩu nằm cạnh từ `millionth` trong file `data.txt`.
+- **Lệnh thực thi:**
+  ```bash
+  grep "millionth" data.txt
+  ```
+- **Giải thích:**
+  - `grep`: Lệnh tìm kiếm chuỗi ký tự theo mẫu (pattern) trong file văn bản.
+
+---
+
+## Level 8 -> Level 9
+- **Mục tiêu:** Tìm dòng duy nhất chỉ xuất hiện đúng 1 lần trong file `data.txt` (các dòng khác đều bị lặp lại).
+- **Lệnh thực thi:**
+  ```bash
+  sort data.txt | uniq -u
+  ```
+- **Giải thích:**
+  - `uniq`: Chỉ hoạt động chính xác khi các dòng giống nhau nằm kề nhau.
+  - Đường ống `|`: Đẩy kết quả đã sắp xếp của `sort` sang cho `uniq`.
+  - `uniq -u`: Cờ `-u` (unique) chỉ in ra những dòng xuất hiện duy nhất 1 lần.
+
+---
+
+## Level 9 -> Level 10
+- **Mục tiêu:** Tìm chuỗi văn bản đọc được duy nhất đứng sau nhiều dấu `=` trong file nhị phân `data.txt`.
+- **Lệnh thực thi:**
+  ```bash
+  strings data.txt | grep "^="
+  ```
+- **Giải thích:**
+  - `strings`: Trích xuất các chuỗi ký tự in được (printable characters) từ một file dữ liệu nhị phân.
+  - `grep "^="`: Lọc các chuỗi bắt đầu bằng dấu `=`.
+
+---
+
+## Level 10 -> Level 11
+- **Mục tiêu:** Giải mã dữ liệu bị mã hóa Base64 trong file `data.txt`.
+- **Lệnh thực thi:**
+  ```bash
+  base64 -d data.txt
+  ```
+- **Giải thích:**
+  - `base64 -d` (`--decode`): Chuyển đổi dữ liệu từ dạng Base64 về dạng văn bản thô ban đầu.
+
+---
+
+## Level 11 -> Level 12
+- **Mục tiêu:** Giải mã file `data.txt` bị mã hóa bằng thuật toán xoay 13 ký tự (ROT13).
+- **Lệnh thực thi:**
+  ```bash
+  cat data.txt | tr 'A-Za-z' 'N-ZA-Mn-za-m'
+  ```
+- **Giải thích:**
+  - `tr`: Lệnh thay thế/dịch ký tự (Translate).
+  - `'A-Za-z' 'N-ZA-Mn-za-m'`: Bảng dịch chuyển toàn bộ ký tự in hoa và in thường đi 13 vị trí trong bảng chữ cái tiếng Anh.
+
+---
+
+## Level 12 -> Level 13
+- **Mục tiêu:** Phục hồi file `data.txt` (vốn là file hex dump) và giải nén liên tục qua nhiều lớp nén lồng nhau (Gzip, Bzip2, Tar).
+- **Lệnh thực thi:**
+  ```bash
+  # Tạo thư mục làm việc tạm thời
+  mkdir /tmp/mywork_12
+  cp data.txt /tmp/mywork_12/
+  cd /tmp/mywork_12
+
+  # Chuyển Hex Dump thành file nhị phân
+  xxd -r data.txt > compressed
+
+  # Kiểm tra định dạng và giải nén từng lớp
+  file compressed
+  # Nếu là gzip:
+  mv compressed compressed.gz && gzip -d compressed.gz
+  
+  # Tiếp tục dùng `file` kiểm tra file xả ra và giải nén tương ứng:
+  # bzip2: mv file file.bz2 && bzip2 -d file.bz2
+  # tar:   tar -xf file
+  ```
+- **Giải thích:**
+  - `xxd -r`: Revert hex dump về dạng file nhị phân gốc.
+  - `file <filename>`: Bắt buộc dùng lệnh này ở mỗi bước để xác định chính xác thuật toán nén thực tế thay vì dựa vào phần mở rộng của file.
+
+---
+
+## Level 13 -> Level 14
+- **Mục tiêu:** Sử dụng SSH Private Key lưu trong file `sshkey.private` để đăng nhập vào tài khoản `bandit14` trên `localhost`.
+- **Lệnh thực thi:**
+  ```bash
+  ssh -i sshkey.private bandit14@localhost -p 2220
+  ```
+- **Giải thích:**
+  - `-i`: Khai báo file chứa khóa riêng tư (RSA Private Key) dùng để xác thực SSH thay cho mật khẩu truyền thống.
+
+---
+
+## Level 14 -> Level 15
+- **Mục tiêu:** Gửi mật khẩu hiện tại của `bandit14` (lấy tại `/etc/bandit_pass/bandit14`) tới cổng 30000 trên `localhost`.
+- **Lệnh thực thi:**
+  ```bash
+  nc localhost 30000
+  # Nhập/Dán mật khẩu bandit14 và nhấn Enter
+  ```
+- **Giải thích:**
+  - `nc` (Netcat): Công cụ kết nối raw socket TCP/UDP. Khi kết nối thành công tới cổng 30000, gửi đúng mật khẩu để server kiểm tra và trả lại mật khẩu Level 15.
+
+---
+
+## Level 15 -> Level 16
+- **Mục tiêu:** Gửi mật khẩu hiện tại tới cổng 30001 trên `localhost` sử dụng giao thức mã hóa SSL/TLS.
+- **Lệnh thực thi:**
+  ```bash
+  openssl s_client -connect localhost:30001
+  # Dán mật khẩu bandit15 và nhấn Enter
+  ```
+- **Giải thích:**
+  - `openssl s_client`: Công cụ tạo kết nối TLS/SSL client. Vì cổng 30001 mã hóa truyền thông nên lệnh Netcat thông thường không thể giao tiếp trực tiếp được.
+
+---
+
+## Level 16 -> Level 17
+- **Mục tiêu:** Quét các cổng từ 31000 đến 32000 trên `localhost` để tìm dịch vụ SSL đang mở, gửi mật khẩu hiện tại để nhận về RSA Private Key của `bandit17`.
+- **Lệnh thực thi:**
+  ```bash
+  # 1. Dò tìm cổng mở bằng nmap
+  nmap -p 31000-32000 localhost
+
+  # 2. Kết nối tới cổng dịch vụ mã hóa SSL (ví dụ cổng 31790)
+  openssl s_client -connect localhost:31790
+
+  # 3. Dán mật khẩu bandit16 -> Server trả về RSA Private Key
+  # 4. Lưu RSA Private Key ra file trong /tmp
+  nano /tmp/bandit17.key
+  chmod 600 /tmp/bandit17.key
+
+  # 5. Đăng nhập bandit17
+  ssh -i /tmp/bandit17.key bandit17@localhost -p 2220
+  ```
+- **Giải thích:**
+  - `nmap -p`: Quét cổng trong dải chỉ định.
+  - `chmod 600`: Bắt buộc thiết lập quyền chỉ có chủ sở hữu mới được đọc/ghi file khóa SSH private key, nếu không SSH sẽ từ chối nhận file vì lý do an toàn.
+
+---
+
+## Level 17 -> Level 18
+- **Mục tiêu:** So sánh 2 file `passwords.old` và `passwords.new` trong thư mục home để tìm dòng duy nhất bị thay đổi.
+- **Lệnh thực thi:**
+  ```bash
+  diff passwords.old passwords.new
+  ```
+- **Giải thích:**
+  - `diff`: So sánh từng dòng của 2 file văn bản. Kết quả hiển thị dấu `<` đại diện cho dòng cũ và `>` đại diện cho dòng mới được thêm vào.
+
+---
+
+## Level 18 -> Level 19
+- **Mục tiêu:** Đăng nhập vào `bandit18`. Môi trường Shell interactive bị ngắt ngay lập tức do cài đặt trong `.bashrc`.
+- **Lệnh thực thi:**
+  ```bash
+  ssh bandit18@bandit.labs.overthewire.org -p 2220 "cat readme"
+  ```
+- **Giải thích:**
+  - Bằng cách truyền trực tiếp lệnh `"cat readme"` ở cuối câu lệnh SSH, hệ thống sẽ thực thi lệnh này ngay trên máy chủ và trả về kết quả mà không cần mở một phiên làm việc Shell tương tác (Interactive Bash Shell) - do đó vượt qua được cơ chế thoát tự động của `.bashrc`.
+
+---
+
+## Level 19 -> Level 20
+- **Mục tiêu:** Khai thác file thực thi `bandit20-do` có gắn thuộc tính SUID để đọc file mật khẩu của `bandit20` nằm trong `/etc/bandit_pass/bandit20`.
+- **Lệnh thực thi:**
+  ```bash
+  ./bandit20-do cat /etc/bandit_pass/bandit20
+  ```
+- **Giải thích:**
+  - **SUID (Set Owner User ID):** Là một quyền đặc biệt trên Linux. Khi một file thực thi có cờ SUID, tiến trình chạy file đó sẽ thực thi dưới quyền của chủ sở hữu file (ở đây là `bandit20`) chứ không phải dưới quyền của người đang gõ lệnh (`bandit19`).
+  - Lệnh `./bandit20-do` nhận tham số truyền vào và thực thi tham số đó bằng đặc quyền của `bandit20`.
 ---
 title: "Day 1: Binary Search, SUID Privilege Escalation & Cron Jobs"
 date: "2026-10-07"
