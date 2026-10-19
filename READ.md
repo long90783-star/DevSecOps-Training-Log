@@ -1127,3 +1127,51 @@ Ghép 5 mảnh lại theo đúng thứ tự, ta hoàn thành cuộc đi săn.
 
 ---
 *Documented by [HoangLongUIT] - Hành trình chinh phục Cyber Security & DevSecOps.*
+# [Write-up] picoCTF: Cookies (Web Exploitation)
+
+**Công cụ sử dụng:** Burp Suite (Tính năng Intruder)
+**Kỹ thuật:** Cookie Manipulation, Automated Brute-force
+
+## 1. Đặt vấn đề
+Thử thách cung cấp một trang web có ô tìm kiếm tên các loại bánh quy (cookies). Nếu nhập đúng loại bánh (ví dụ: `snickerdoodle`), trang web báo thành công nhưng không hiển thị cờ. Gợi ý của bài toán nằm ở chính tên của nó: "Cookies" - một thẻ lưu trữ dữ liệu của trình duyệt.
+
+## 2. Phân tích lỗ hổng (Vulnerability Analysis)
+Khi ta tìm kiếm một loại bánh quy hợp lệ, máy chủ trả về một HTTP Response có chứa lệnh cài đặt cookie: `name=0` (hoặc 1, 2, 3...). 
+Điều này chứng tỏ ứng dụng web đang quyết định nội dung hiển thị dựa trên giá trị của cookie `name`. Lỗ hổng ở đây là người dùng hoàn toàn có thể **tự ý sửa đổi giá trị cookie** này để ép máy chủ trả về các trang web ẩn, và một trong số đó đang giấu lá cờ (flag).
+
+## 3. Quá trình khai thác (Exploitation Steps)
+Thay vì đổi số thủ công trên trình duyệt hàng chục lần rất mất thời gian, chúng ta sẽ sử dụng công cụ **Burp Suite Intruder** để tự động hóa quá trình dò tìm (Brute-force).
+
+### Bước 1: Bắt gói tin (Capture Request)
+1. Mở trình duyệt tích hợp của Burp Suite (đảm bảo tính năng *Intercept is ON*).
+2. Truy cập trang web và nhập chữ `snickerdoodle` vào ô tìm kiếm.
+3. Burp Suite sẽ tóm được gói tin HTTP Request có chứa đoạn: `Cookie: name=0`.
+
+### Bước 2: Khóa mục tiêu (Set Payload Position)
+1. Nhấn `Ctrl + I` (hoặc chuột phải chọn *Send to Intruder*) để đẩy gói tin sang trạm tấn công tự động.
+2. Chuyển sang tab **Intruder > Positions**.
+3. Nhấn nút **Clear §** để xóa toàn bộ các đánh dấu mặc định của phần mềm.
+4. Bôi đen duy nhất con số `0` ở dòng `Cookie: name=0` và nhấn **Add §**. 
+5. Kết quả gói tin được đánh dấu chuẩn xác: `Cookie: name=§0§`.
+*(Hành động này ra lệnh cho Burp Suite: Chỉ thay đổi dữ liệu vào đúng vị trí của con số 0).*
+
+### Bước 3: Nạp đạn (Configure Payloads)
+1. Chuyển sang tab **Intruder > Payloads**.
+2. Đổi ô *Payload type* thành **Numbers** (Dải số).
+3. Thiết lập thông số vòng lặp:
+   - **From:** `1`
+   - **To:** `30` (Dò trong khoảng 30 giá trị đầu tiên là đủ)
+   - **Step:** `1`
+
+### Bước 4: Khai hỏa và Tìm cờ (Attack & Analyze)
+1. Nhấn nút **Start attack**. Burp Suite sẽ tự động gửi 30 gói tin với cookie thay đổi liên tục từ 1 đến 30.
+2. **Tuyệt chiêu lọc kết quả:** Thay vì click đọc từng gói tin, ta chỉ cần quan sát cột **Length** (Độ dài mã nguồn trả về). 
+3. Hầu hết các phản hồi trả về giao diện bánh quy bình thường nên có thông số Length giống hệt nhau. Tuy nhiên, tại gói tin **số 18** (Payload = 18), cột Length hiển thị một con số **khác biệt hoàn toàn**.
+4. Click vào gói tin số 18, kiểm tra phần **Response > Raw**, cuộn xuống dưới cùng và lá cờ đã hiện ra rành rành trong mã nguồn HTML.
+
+## 4. Kết quả (Flag)
+Lá cờ thu được từ gói tin có cookie số 18 là:
+**`academy{3v3ry1_l0v3s_c00k135_90a3a7cb}`**
+
+---
+*Tài liệu được ghi chép để theo dõi tiến trình học tập bảo mật web và DevSecOps.*
