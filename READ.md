@@ -1175,3 +1175,81 @@ Lá cờ thu được từ gói tin có cookie số 18 là:
 
 ---
 *Tài liệu được ghi chép để theo dõi tiến trình học tập bảo mật web và DevSecOps.*
+# \[Write-up\] LeetCode 128: Longest Consecutive Sequence
+
+**Độ khó:** Medium
+**Chủ đề:** Array, Hash Table
+**Ràng buộc cốt lõi:** Thuật toán phải chạy trong thời gian $\mathcal{O}(n)$.
+
+## 1. Phân tích bài toán
+Đề bài yêu cầu tìm chiều dài của chuỗi các số nguyên liên tiếp dài nhất trong một mảng chưa sắp xếp. 
+
+**Cách tiếp cận ngây thơ (Brute Force / Sorting):**
+Cách dễ nghĩ nhất là sắp xếp lại mảng (ví dụ: `[100, 4, 200, 1, 3, 2]` thành `[1, 2, 3, 4, 100, 200]`), sau đó duyệt qua một lượt để đếm. Tuy nhiên, các thuật toán sắp xếp tốt nhất cũng tiêu tốn $\mathcal{O}(n \log n)$ thời gian. Điều này vi phạm nghiêm trọng yêu cầu $\mathcal{O}(n)$ của đề bài.
+
+## 2. Lựa chọn Cấu trúc dữ liệu: Hash Set
+Để đạt được $\mathcal{O}(n)$, ta cần một cấu trúc dữ liệu cho phép:
+1.  Loại bỏ các phần tử trùng lặp (tránh làm việc thừa).
+2.  Tra cứu sự tồn tại của một phần tử bất kỳ với thời gian $\mathcal{O}(1)$.
+$\Rightarrow$ `std::unordered_set` (Hash Set) là mảnh ghép hoàn hảo.
+
+## 3. Tư duy Thuật toán (The $O(n)$ Trick)
+Điểm sáng tạo nhất của thuật toán này là **chỉ bắt đầu đếm tại con số nhỏ nhất của mỗi chuỗi**.
+
+*   Làm sao để biết `num` là số nhỏ nhất của chuỗi? Ta chỉ cần kiểm tra xem `num - 1` có tồn tại trong Set hay không.
+    *   Nếu có $\rightarrow$ `num` nằm giữa chuỗi, bỏ qua.
+    *   Nếu KHÔNG $\rightarrow$ `num` chính là điểm khởi đầu. Kích hoạt vòng lặp `while` đếm tiến lên (`num + 1`, `num + 2`...) cho đến khi đứt đoạn.
+
+## 4. Những cạm bẫy thực tế (Troubleshooting)
+
+Trong quá trình triển khai, có 2 nguyên nhân cực kỳ phổ biến dẫn đến lỗi **Time Limit Exceeded (TLE)** đã được khắc phục:
+
+1.  **Lỗi vòng lặp vô hạn (Infinite Loop):**
+    Khi dùng vòng lặp `while` để đếm tiến lên, phải nhớ cộng dồn vào **biến đếm tạm thời** (ví dụ: `cnumber`), tuyệt đối không kiểm tra cứng một giá trị `nums[i] + 1` liên tục vì nó sẽ không bao giờ thay đổi, khiến vòng lặp kẹt mãi mãi.
+2.  **Lặp qua mảng gốc chứa nhiều phần tử trùng lặp:**
+    Nếu duyệt bằng vòng `for (int i = 0; i < nums.size(); i++)` qua mảng `nums` ban đầu, ta sẽ lãng phí thời gian tra cứu cho các số bị lặp lại hàng vạn lần. 
+    $\Rightarrow$ **Giải pháp tối ưu:** Duyệt trực tiếp qua các phần tử của `unordered_set` (`for (int num : myset)`). Set đã tự động xóa hết bộ lặp, nên vòng `for` sẽ chạy với số vòng tối thiểu.
+
+## 5. Mã nguồn C++ Hoàn chỉnh (Accepted)
+
+```cpp
+#include <vector>
+#include <unordered_set>
+#include <algorithm>
+
+using namespace std;
+
+class Solution {
+public:
+    int longestConsecutive(vector<int>& nums) {
+        // 1. Nạp mảng vào Hash Set để lấy đặc quyền tra cứu O(1) và lọc trùng
+        unordered_set<int> myset(nums.begin(), nums.end());
+        int maxlen = 0;
+
+        // 2. Chỉ duyệt qua các phần tử duy nhất ĐÃ NẰM TRONG SET
+        for (int num : myset) {
+            
+            // 3. Khóa mục tiêu: Chỉ bắt đầu đếm nếu đây là số nhỏ nhất của chuỗi
+            if (myset.find(num - 1) == myset.end()) {
+                int cnumber = num;
+                int clen = 1;
+
+                // 4. Đếm tiến lên
+                while (myset.find(cnumber + 1) != myset.end()) {
+                    cnumber++;
+                    clen++;
+                }
+
+                // 5. Cập nhật kỷ lục
+                maxlen = max(maxlen, clen);
+            }
+        }
+
+        return maxlen;
+    }
+};
+```
+
+## 6. Đánh giá độ phức tạp
+*   **Thời gian (Time Complexity):** $\mathcal{O}(n)$. Mặc dù có vòng lặp `while` lồng trong vòng lặp `for`, nhưng lệnh trong `while` chỉ thực thi đối với những chuỗi hợp lệ. Tính tổng thể, mỗi con số trong mảng chỉ được truy cập tối đa 2 lần.
+*   **Không gian (Space Complexity):** $\mathcal{O}(n)$. Hash Set cần cấp phát bộ nhớ để lưu trữ tối đa $n$ phần tử của mảng.
