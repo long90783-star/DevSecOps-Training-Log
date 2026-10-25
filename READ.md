@@ -1253,3 +1253,44 @@ public:
 ## 6. Đánh giá độ phức tạp
 *   **Thời gian (Time Complexity):** $\mathcal{O}(n)$. Mặc dù có vòng lặp `while` lồng trong vòng lặp `for`, nhưng lệnh trong `while` chỉ thực thi đối với những chuỗi hợp lệ. Tính tổng thể, mỗi con số trong mảng chỉ được truy cập tối đa 2 lần.
 *   **Không gian (Space Complexity):** $\mathcal{O}(n)$. Hash Set cần cấp phát bộ nhớ để lưu trữ tối đa $n$ phần tử của mảng.
+# 📝 WebSec Write-up: SQL Injection (PortSwigger)
+
+**Author:** [Your Name]
+**Date:** October 25, 2026
+**Category:** SQL Injection (SQLi)
+
+---
+
+## Lab 1: SQL injection vulnerability in WHERE clause allowing retrieval of hidden data
+
+*   **Mức độ:** Apprentice
+*   **Mục tiêu:** Vượt qua bộ lọc `released = 1` để hiển thị các sản phẩm đang bị ẩn.
+*   **Điểm yếu (Vulnerability):** Tham số `category` trên URL truyền trực tiếp dữ liệu vào truy vấn SQL mà không được sanitize (làm sạch).
+*   **Truy vấn gốc mô phỏng:** 
+    ```sql
+    SELECT * FROM products WHERE category = '[Input]' AND released = 1
+    ```
+*   **Payload thực thi:** `'+OR+1=1--` (tương đương `' OR 1=1--`)
+*   **Cách thức hoạt động:**
+    1. Dấu `'` đóng sớm chuỗi `category`.
+    2. Mệnh đề `OR 1=1` luôn đúng, khiến điều kiện WHERE trả về True cho tất cả các bản ghi.
+    3. Dấu `--` comment (vô hiệu hóa) điều kiện `AND released = 1` phía sau để tránh lỗi cú pháp.
+*   **Kết quả:** Hệ thống hiển thị toàn bộ sản phẩm trong Database, bao gồm cả các mục "Unreleased".
+
+---
+
+## Lab 2: SQL injection UNION attack, determining the number of columns returned by the query
+
+*   **Mức độ:** Practitioner
+*   **Mục tiêu:** Xác định số lượng cột mà truy vấn gốc trả về bằng kỹ thuật UNION attack.
+*   **Điểm yếu (Vulnerability):** Tham số `category` cho phép chèn lệnh `UNION` để gộp kết quả với một truy vấn thứ hai.
+*   **Payload thực thi:** `'+UNION+SELECT+NULL,NULL,NULL--` (tương đương `' UNION SELECT NULL,NULL,NULL--`)
+*   **Cách thức hoạt động (Quy trình dò):**
+    *   Sử dụng giá trị `NULL` vì nó khớp với mọi kiểu dữ liệu, giúp loại trừ lỗi Data Type.
+    *   Thử tiêm số lượng `NULL` tăng dần:
+        *   `' UNION SELECT NULL--` ❌ (Internal Server Error -> Sai số lượng cột)
+        *   `' UNION SELECT NULL,NULL--` ❌ (Lỗi)
+        *   `' UNION SELECT NULL,NULL,NULL--` ✅ (Web load bình thường)
+*   **Bài học kinh nghiệm (Lessons Learned):** 
+    *   Ghi nhận số lượng cột của truy vấn gốc là **3 cột**.
+    *   Cần đặc biệt chú ý lỗi chính tả khi viết payload. Một lỗi typo nhỏ (như viết nhầm thành `SELLECT`) cũng sẽ trả về HTTP 500 Internal Server Error, dễ gây nhầm lẫn với lỗi sai số lượng cột.
