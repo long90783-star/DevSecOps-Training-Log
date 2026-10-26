@@ -1294,3 +1294,48 @@ public:
 *   **Bài học kinh nghiệm (Lessons Learned):** 
     *   Ghi nhận số lượng cột của truy vấn gốc là **3 cột**.
     *   Cần đặc biệt chú ý lỗi chính tả khi viết payload. Một lỗi typo nhỏ (như viết nhầm thành `SELLECT`) cũng sẽ trả về HTTP 500 Internal Server Error, dễ gây nhầm lẫn với lỗi sai số lượng cột.
+# PortSwigger Write-up: SQL Injection UNION Attacks
+
+## 1. Lab: SQL injection UNION attack, finding a column containing text
+**Mục tiêu:** Dò tìm vị trí cột có kiểu dữ liệu văn bản (Text) và in ra chuỗi hệ thống yêu cầu.
+
+*   **Bước 1: Xác định số lượng cột** 
+    Sử dụng payload bơm giá trị `NULL` cho đến khi máy chủ trả về mã `200 OK`. 
+    *Payload:* `'+UNION+SELECT+NULL,NULL,NULL--` (Xác định được bảng có 3 cột).
+*   **Bước 2: Dò tìm cột chứa Text** 
+    Lần lượt thay `NULL` bằng một chuỗi ký tự bất kỳ (vd: `'abcdef'`) vào từng vị trí để kiểm tra. Cột nào trả về `200 OK` là cột nhận Text.
+    *Payload kiểm tra cột 2:* `'+UNION+SELECT+NULL,'abcdef',NULL--`
+*   **Bước 3: Khai thác** 
+    Thay thế chuỗi `'abcdef'` bằng chuỗi ngẫu nhiên mà đề bài yêu cầu và gửi request để hoàn thành Lab.
+
+---
+
+## 2. Lab: SQL injection UNION attack, retrieving data from other tables
+**Mục tiêu:** Trích xuất `username` và `password` từ bảng `users` để đăng nhập tài khoản `administrator`.
+
+*   **Bước 1: Xác định cấu trúc bảng** 
+    Dò `NULL` và phát hiện truy vấn gốc trả về **2 cột**.
+*   **Bước 2: Kiểm tra kiểu dữ liệu** 
+    Thử nghiệm với `'+UNION+SELECT+'a','b'--` và nhận mã `200 OK`, chứng tỏ cả 2 cột đều nhận dữ liệu Text.
+*   **Bước 3: Trích xuất dữ liệu** 
+    Thay chuỗi kiểm tra bằng tên cột mục tiêu (`username`, `password`) và chỉ định bảng (`users`).
+    *Payload:* `'+UNION+SELECT+username,password+FROM+users--`
+*   **Bước 4: Hoàn thành** 
+    Giao diện web trả về danh sách tài khoản. Lấy mật khẩu của `administrator` và tiến hành đăng nhập.
+
+---
+
+## 3. Lab: SQL injection UNION attack, retrieving multiple values in a single column
+**Mục tiêu:** Trích xuất cả `username` và `password`, nhưng truy vấn gốc chỉ có **1 cột** hỗ trợ kiểu Text.
+
+*   **Bước 1: Xác định cấu trúc và giới hạn** 
+    Dò `NULL` phát hiện truy vấn trả về 2 cột, nhưng khi test `'a'` thì chỉ có **cột thứ 2** là nhận kiểu Text.
+    *Payload khung:* `'+UNION+SELECT+NULL,'[Chỗ_trống_nhận_Text]'--`
+*   **Bước 2: Kỹ thuật nối chuỗi (String Concatenation)** 
+    Sử dụng toán tử `||` (chuẩn PostgreSQL/Oracle) để gộp 2 trường dữ liệu vào chung 1 cột. Kẹp thêm ký tự `~` để dễ dàng tách chuỗi bằng mắt thường.
+    *Cú pháp:* `username || '~' || password`
+*   **Bước 3: Trích xuất dữ liệu** 
+    Bơm cú pháp nối chuỗi vào vị trí cột thứ 2.
+    *Payload:* `'+UNION+SELECT+NULL,username||'~'||password+FROM+users--`
+*   **Bước 4: Hoàn thành** 
+    Giao diện trả về kết quả dạng `administrator~[mật_khẩu]`. Trích xuất phần mật khẩu sau dấu `~` và đăng nhập.
