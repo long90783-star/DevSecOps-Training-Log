@@ -1339,3 +1339,65 @@ public:
     *Payload:* `'+UNION+SELECT+NULL,username||'~'||password+FROM+users--`
 *   **Bước 4: Hoàn thành** 
     Giao diện trả về kết quả dạng `administrator~[mật_khẩu]`. Trích xuất phần mật khẩu sau dấu `~` và đăng nhập.
+# Tổng hợp Write-up: Blind SQL Injection 
+
+Tài liệu này tóm tắt phương pháp luận, giải phẫu payload và các lưu ý quan trọng khi khai thác Blind SQL Injection (SQLi mù) qua hai kỹ thuật: Phản hồi có điều kiện (Boolean-based) và Lỗi có điều kiện (Error-based).
+
+---
+
+## Lab 1: Blind SQLi with Conditional Responses (Boolean-based)
+
+**Mục tiêu:** Ứng dụng trả về nội dung khác nhau (chữ "Welcome back") dựa trên kết quả của truy vấn SQL (ĐÚNG hoặc SAI).
+
+### Giải phẫu Payload
+`TrackingId=xyz' AND (SELECT SUBSTRING(password,§1§,1) FROM users WHERE username='administrator')='§a§'--`
+
+**Ý nghĩa câu lệnh:**
+*   `'`: Đóng chuỗi chứa giá trị TrackingId ban đầu.
+*   `AND`: Toán tử logic. Toàn bộ câu lệnh chỉ ĐÚNG khi cả 2 vế (TrackingId tồn tại VÀ Mật khẩu khớp) đều ĐÚNG.
+*   `SUBSTRING(chuỗi, vị_trí, số_lượng)`: Hàm cắt chuỗi để lấy từng ký tự ra so sánh.
+*   `--`: Ký hiệu comment, vô hiệu hóa toàn bộ phần code thừa phía sau của máy chủ để tránh lỗi cú pháp.
+
+**Cách khai thác (Burp Suite Intruder):**
+1. Bắt gói tin `GET /` chứa cookie mới nhất.
+2. Đẩy sang Intruder, dùng kiểu **Cluster bomb**.
+3. Cài 2 biến mục tiêu: `§1§` (Vị trí: Numbers 1-20) và `§a§` (Ký tự: Brute forcer a-z0-9).
+4. Thiết lập **Grep - Match** để bắt chữ `Welcome back`. Các gói tin có chữ này chính là ký tự đúng.
+
+---
+
+## Lab 2: Blind SQLi with Conditional Errors (Error-based trên Oracle)
+
+**Mục tiêu:** Ứng dụng không thay đổi giao diện, nhưng nếu ép CSDL bị lỗi (ví dụ: chia cho 0), ứng dụng sẽ trả về mã `500 Internal Server Error`. Nếu không lỗi, trả về `200 OK`. Hệ quản trị CSDL là **Oracle**.
+
+### Giải phẫu Payload
+`TrackingId=xyz' || (SELECT CASE WHEN (SUBSTR(password,§1§,1)='§a§') THEN TO_CHAR(1/0) ELSE '' END FROM users WHERE username='administrator') || '`
+
+**Ý nghĩa câu lệnh:**
+*   `' || ... || '`: Kỹ thuật nối chuỗi (String Concatenation) trong Oracle. Dấu nháy đơn đầu để đóng chuỗi trước, dấu nháy đơn cuối để hứng chuỗi dư thừa phía sau. Đảm bảo cấu trúc SQL hoàn chỉnh.
+*   `CASE WHEN (điều_kiện) THEN (hành_động_1) ELSE (hành_động_2) END`: Khối lệnh rẽ nhánh (If/Else).
+*   `SUBSTR()`: Hàm cắt chuỗi đặc thù của Oracle.
+*   `TO_CHAR(1/0)`: Ép CSDL thực hiện phép toán vô lý (chia cho 0) để tạo lỗi `Divisor is equal to zero`. `TO_CHAR` dùng để ép kiểu dữ liệu đồng nhất với vế `ELSE ''` (chuỗi rỗng).
+*   **Logic:** Nếu ký tự đoán ĐÚNG -> Kích hoạt chia cho 0 -> Lỗi 500. Nếu SAI -> Trả về chuỗi rỗng -> 200 OK.
+
+**Cách khai thác (Burp Suite Intruder):**
+1. Test thử bảng ảo `FROM dual` để xác nhận bẫy lỗi 1/0 hoạt động.
+2. Dùng Intruder (Cluster bomb) với cấu hình biến tương tự Lab 1.
+3. Lọc kết quả bằng cách sắp xếp theo cột **Status code** (tìm mã 500).
+
+---
+
+## ⚠️ Các lỗi thực hành kinh điển cần tránh
+
+1.  **Dùng Cookie "Ôi Thiu" (Phiên làm việc hết hạn):**
+    *   *Triệu chứng:* Chạy Intruder hàng ngàn gói tin nhưng không có kết quả nào ĐÚNG (0 hit).
+    *   *Nguyên nhân:* Mệnh đề `AND` yêu cầu vế trước phải ĐÚNG. Nếu dùng `TrackingId` cũ không còn trên máy chủ, vế trước SAI, dẫn đến toàn bộ payload bị đánh giá SAI dù có đoán trúng mật khẩu.
+    *   *Khắc phục:* Luôn F5 trình duyệt và bắt lại gói tin mới nhất trước khi đưa vào Intruder.
+2.  **Lỗi Dấu Nháy (Syntax Error):**
+    *   *Triệu chứng:* Máy chủ luôn trả về lỗi 500 bất kể điều kiện (1=1 hay 1=2).
+    *   *Nguyên nhân:* Thiếu dấu nháy đơn `'` ở đầu hoặc cuối khi dùng cấu trúc `||`.
+    *   *Khắc phục:* Đảm bảo kiểm tra kỹ cấu trúc đóng mở chuỗi `' || (lệnh) || '`.
+3.  **Bắt Nhầm Gói Tin:**
+    *   *Triệu chứng:* Server báo lỗi Protocol Error (400 Bad Request) hoặc không phản hồi.
+    *   *Nguyên nhân:* Bắt nhầm các gói tin tải ngầm như `Upgrade: websocket` hoặc file tĩnh (CSS/JS) thay vì gói tin tải trang chủ HTML (`GET /`).
+    *   *Khắc phục:* Nhìn kỹ cột URL và MIME type (phải là HTML, Status 200) trong HTTP History.
