@@ -1445,3 +1445,80 @@ Tài liệu này tóm tắt phương pháp luận, giải phẫu payload và cá
    * Bật hiển thị cột **Response received** (Thời gian phản hồi) và sắp xếp từ cao xuống thấp.
    * Tất cả những dòng có thời gian **> 10,000 millis** chính là kết quả đúng. 
    * Dựa vào Payload 1 (vị trí) và Payload 2 (Ký tự) của các dòng đó để ghép lại thành mật khẩu hoàn chỉnh.
+# BÁO CÁO KỸ THUẬT (WRITE-UP): Tích hợp SAST Semgrep vào GitHub Actions và Vá lỗi SQL Injection
+
+**Lĩnh vực:** DevSecOps / Web Security
+**Mục tiêu:** Xây dựng đường ống CI/CD tự động phát hiện (Detect) và ngăn chặn (Block) mã nguồn chứa lỗ hổng bảo mật, đồng thời thực hiện vá lỗi (Remediation) theo tiêu chuẩn an toàn.
+
+---
+
+## 1. Kiến trúc hệ thống & Môi trường
+*   **Nền tảng CI/CD:** GitHub Actions.
+*   **Công cụ SAST (Static Application Security Testing):** Semgrep.
+*   **Ngôn ngữ & Cơ sở dữ liệu:** Python 3, SQLite3.
+*   **Mục tiêu tấn công:** File `app.py` chứa lỗ hổng SQL Injection qua cơ chế nối chuỗi động (`f-string`).
+
+## 2. Tiến trình thực hiện (Workflow)
+
+### Giai đoạn 1: Khởi tạo Pipeline & Khắc phục lỗi cấu hình YAML
+**Vấn đề:** Thiết lập đường ống CI/CD ban đầu bằng file `.github/workflows/security-scan.yml` gặp lỗi cú pháp do sử dụng phím Tab để thụt lề.
+
+**Cách giải quyết:** 
+Áp dụng tiêu chuẩn quốc tế của cấu hình YAML: Sử dụng **2 dấu cách (spaces)** cho mỗi cấp độ phân cấp. Mã nguồn khởi tạo pipeline tải công cụ Semgrep (sử dụng `returntocorp/semgrep-action@v1`) và chạy trên môi trường `ubuntu-latest`.
+
+### Giai đoạn 2: Hiện tượng False Negative (Bỏ lọt lỗi) của bộ quy tắc mặc định
+**Thực trạng:** 
+Cấu hình ban đầu sử dụng các bộ quy tắc mặc định là `config: "p/sql-injection"` và sau đó là `config: "p/python"`. Cả hai lần chạy đều trả về kết quả **✅ Success (0 findings)**, dù file `app.py` rõ ràng chứa mã độc:
+
+```python
+query = f"SELECT * FROM users WHERE username='{username}'"
+cursor.execute(query)
+```
+
+**Phân tích nguyên nhân:** 
+Các bộ quy tắc cộng đồng của Semgrep dựa trên cơ chế Taint Analysis (phân tích luồng dữ liệu). Do hàm `get_user(username)` là một hàm độc lập, không gắn với các Web Framework (như Flask/Django) để nhận HTTP Request, Semgrep không đánh giá tham số `username` là một "Nguồn độc hại" (Untrusted Source). Hệ quả là quá trình khớp mẫu cây cú pháp (AST) không đánh cờ cảnh báo lỗi này.
+
+### Giai đoạn 3: Xây dựng Custom Rule (Quy tắc tùy chỉnh) đánh chặn lỗ hổng
+Để khắc phục hạn chế của bộ quy tắc mặc định, một Custom Rule được định nghĩa trong file `.semgrep.yml` nhằm bắt đích danh hành vi sử dụng `f-string` bên trong hàm `execute()` của SQLite3.
+
+**Nội dung `.semgrep.yml`:**
+```yaml
+rules:
+  - id: python-sqlite3-sqli-custom
+    patterns:
+      - pattern: $CURSOR.execute(f"...")
+    message: "LỖI BẢO MẬT: Phát hiện nối chuỗi f-string trực tiếp trong câu lệnh SQL execute(). Nguy cơ SQL Injection cao!"
+    languages: [python]
+    severity: ERROR
+```
+*   `$CURSOR`: Biến đại diện (Metavariable) khớp với mọi tên biến con trỏ cơ sở dữ liệu.
+*   `f"..."`: Bắt mọi tham số được định dạng bằng f-string động.
+*   `severity: ERROR`: Trả về Exit Code 1 để ép đường ống CI/CD phải sập.
+
+**Kết quả:** 
+Cập nhật file `security-scan.yml` để trỏ vào `config: ".semgrep.yml"`. Pipeline lập tức bắt trúng lỗ hổng tại dòng lệnh `cursor.execute(...)` và đánh sập tiến trình với trạng thái **❌ Failure**, ngăn chặn thành công việc triển khai mã lỗi.
+
+### Giai đoạn 4: Vá lỗ hổng triệt để (Remediation)
+**Phân tích mã lỗi:**
+Mã nguồn cũ sử dụng `cursor.execute(f"SELECT * FROM users WHERE username='{username}'")`. Việc để sót ký tự `f` tạo ra một chuỗi động, cho phép dữ liệu người dùng thay đổi cấu trúc truy vấn SQL (SQL Injection).
+
+**Giải pháp:**
+Áp dụng kỹ thuật **Truy vấn tham số hóa (Parameterized Query)**. Tách biệt hoàn toàn cấu trúc lệnh SQL tĩnh và dữ liệu đầu vào.
+
+```python
+# Xóa bỏ chữ 'f', sử dụng dấu '?' làm vùng giữ chỗ
+cursor.execute("SELECT * FROM users WHERE username=?", (username,))
+```
+*   Dấu `?` hoạt động như một vùng giữ chỗ an toàn.
+*   Dữ liệu `username` được truyền qua Tuple `(username,)`. Bộ điều khiển SQLite sẽ tự động mã hóa giá trị này thành văn bản thuần túy, vô hiệu hóa mọi ký tự SQL độc hại (như `' OR 1=1--`).
+
+**Kết quả cuối cùng:** 
+Đường ống CI/CD được kích hoạt lại. Mẫu cú pháp `f-string` không còn tồn tại, Custom Rule xác nhận mã nguồn an toàn. Pipeline kết thúc với trạng thái **✅ Success**.
+
+---
+
+## 3. Bài học rút ra (Key Takeaways)
+1. **Sự khắt khe của YAML:** Cấu hình DevSecOps đòi hỏi sự chính xác tuyệt đối về khoảng trắng (2 spaces) thay vì Tab.
+2. **Hạn chế của SAST tự động:** Không được tin tưởng hoàn toàn 100% vào các công cụ quét tự động. Lập trình viên/Kỹ sư bảo mật cần hiểu bản chất của mã nguồn để tinh chỉnh (Custom Rule) khi hệ thống bỏ lọt lỗi (False Negative).
+3. **Tư duy Shift-Left Security:** Bằng cách đưa Semgrep vào GitHub Actions, các lỗ hổng bảo mật như SQL Injection được phát hiện và ép buộc sửa chữa ngay từ khâu đẩy mã nguồn (Push), tiết kiệm chi phí và rủi ro so với việc phát hiện ở giai đoạn Production. 
+4. **Nguyên tắc Phòng thủ SQLi:** Parameterized Queries (Truy vấn tham số hóa) là tiêu chuẩn vàng để vá lỗi SQL Injection, thay vì chỉ cố gắng lọc (filter) hoặc thoát (escape) dữ liệu đầu vào.
