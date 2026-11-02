@@ -1401,3 +1401,47 @@ Tài liệu này tóm tắt phương pháp luận, giải phẫu payload và cá
     *   *Triệu chứng:* Server báo lỗi Protocol Error (400 Bad Request) hoặc không phản hồi.
     *   *Nguyên nhân:* Bắt nhầm các gói tin tải ngầm như `Upgrade: websocket` hoặc file tĩnh (CSS/JS) thay vì gói tin tải trang chủ HTML (`GET /`).
     *   *Khắc phục:* Nhìn kỹ cột URL và MIME type (phải là HTML, Status 200) trong HTTP History.
+# Write-up: Time-Based Blind SQL Injection
+**Nền tảng:** PortSwigger Web Security Academy  
+**Hệ quản trị CSDL:** PostgreSQL  
+**Mục tiêu:** Khai thác lỗ hổng Blind SQL Injection qua tham số Cookie `TrackingId` bằng kỹ thuật đo độ trễ thời gian (Time-based).
+
+---
+
+## 🛠️ Lab 3: Blind SQL injection with time delays
+**Mục đích:** Xác nhận lỗ hổng tồn tại bằng cách ép máy chủ CSDL chờ (sleep) 10 giây.
+
+### Các bước thực hiện:
+1. **Bắt gói tin:** Dùng Burp Suite bắt request chứa Cookie `TrackingId` và đưa vào tab **Repeater**.
+2. **Kỹ thuật sử dụng:** 
+   * Dùng `;` để ngắt câu lệnh gốc và tạo một truy vấn mới (Stacked Queries).
+   * Phải **mã hóa URL** (`Ctrl + U`) để vượt qua cơ chế phân tách Cookie của máy chủ web (VD: `;` thành `%3b`).
+3. **Chèn Payload:**
+   ```http
+   Cookie: TrackingId=xyz'%3b+SELECT+pg_sleep(10)--
+   ```
+4. **Xác nhận:** Bấm Send. Nhìn xuống góc dưới cùng bên phải của Repeater, nếu **Response received** hiển thị `~10,000 millis` (10 giây) -> Lỗ hổng tồn tại.
+
+---
+
+## 🚀 Lab 4: Blind SQL injection with time delays and information retrieval
+**Mục đích:** Trích xuất mật khẩu của user `administrator` (đã biết dài 20 ký tự) bằng cách đo thời gian phản hồi cho từng chữ cái.
+
+### Các bước thực hiện:
+1. **Chuẩn bị Payload:** Gửi request sang **Intruder**. Chọn Attack type là **Cluster bomb** (để chạy 2 vòng lặp: vị trí và ký tự).
+2. **Đặt biến (Add `§`):**
+   ```http
+   Cookie: TrackingId=xyz'%3b+SELECT+CASE+WHEN+(SUBSTRING(password,§1§,1)='§a§')+THEN+pg_sleep(10)+ELSE+pg_sleep(0)+END+FROM+users+WHERE+username='administrator'--
+   ```
+   * *Giải thích logic:* Nếu ký tự ở vị trí `§1§` đúng là `§a§` -> Ngủ 10 giây. Nếu sai -> Trả lời ngay lập tức.
+
+3. **Cấu hình Payloads:**
+   * **Payload 1 (Vị trí):** Kiểu *Numbers*, Range từ `1` đến `20`, Step `1`.
+   * **Payload 2 (Ký tự):** Kiểu *Simple list*, Nhập các chữ cái `a-z` và số `0-9`.
+   * ⚠️ **CỰC KỲ QUAN TRỌNG:** Ở mục *Payload Encoding* (dưới cùng tab Payloads), **bỏ tích (uncheck)** ô "URL-encode these characters" để không làm hỏng payload đã mã hóa trước đó.
+
+4. **Thu hoạch kết quả:**
+   * Bấm **Start attack**.
+   * Bật hiển thị cột **Response received** (Thời gian phản hồi) và sắp xếp từ cao xuống thấp.
+   * Tất cả những dòng có thời gian **> 10,000 millis** chính là kết quả đúng. 
+   * Dựa vào Payload 1 (vị trí) và Payload 2 (Ký tự) của các dòng đó để ghép lại thành mật khẩu hoàn chỉnh.
